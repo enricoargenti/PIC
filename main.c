@@ -48,7 +48,10 @@ char UART_Read2(void);
 void Timer0_Init(void);
 unsigned char GenerateRandomNumber(void);
 
-unsigned char myUniqueId = 0x09;
+void checkMessage(void);
+
+unsigned char gatewayId = 0x00;     // The gateway id is a constant
+unsigned char myUniqueId = 0x09;    // My id is also a constant
 unsigned char messageType;
 
 // Buffer to receive messages from the serial port
@@ -66,6 +69,10 @@ int codeFromKeypadIndex = 0;
 
 // Counter to set the position at which chars have to be printed on second line
 int secondLineLcdPosition = 9; // To print after "Insert: "
+
+// Confirmation codes to open the door or not
+unsigned char openDoorCode = 0x01;
+unsigned char doNotOpenDoorCode = 0x02;
 
 // init KeyPad
 void KeyPadReader();
@@ -201,11 +208,20 @@ void main()
         {
             if(received)
             {
-                lcdSend(L_CLR, COMMAND);
-                lcdPrint("Dato arrivato");
+                //lcdSend(L_CLR, COMMAND);
+                //lcdPrint("Dato arrivato");
+                
+                checkMessage();
+                
+                //Reset only the buffer:
+                // you still have to wait for the message for you
+                
                 bufferIndex = 0;
                 received = 0;
-                //break;
+                for (int i = 0; i < 50; i++)
+                {
+                    buffer[i] = '\0';
+                }
                 
                 lcdSend(L_L2, COMMAND);
                 lcdPrint("Press # to exit");
@@ -217,6 +233,38 @@ void main()
         }
         //UART_Read2(); //legge char lentamente
     }
+}
+
+void checkMessage() {
+    if (buffer[0] == myUniqueId && buffer[1] == gatewayId)
+    {
+        //lcdSend(L_L1, COMMAND);
+        //lcdPrint("Weyyyy!");
+        
+        for (int i = 0; i < 10; i++)
+        {
+            lcdSend(L_L1 + i, COMMAND);
+            lcdSend(buffer[i] + 0x30, DATA);
+        }
+        
+        
+        // This message is for me
+        if (buffer[3] == openDoorCode)
+        {
+            lcdSend(L_L1, COMMAND);
+            lcdPrint("Door Open!");
+        }
+        else if (buffer[3] == doNotOpenDoorCode)
+        {
+            lcdSend(L_L1, COMMAND);
+            lcdPrint("Can't open,sorry");
+        }
+        
+        // Here reset all the global variables
+        
+        
+    }
+    // Else ignore
 }
 
 void UART_Init() {
@@ -251,6 +299,45 @@ void UART_Write(char data) {
     while (!TXIF) // Wait for the previous transmission to finish
         continue;
     TXREG = data; // Transmit data
+}
+
+void __interrupt() ISR() {
+    
+    if(RCIF)
+    {
+        buffer[bufferIndex++] = RCREG;
+        
+        RCIF = 0;
+        received = 1;
+    }
+        
+    TMR0IF = 0;
+    
+}
+
+void Timer0_Init() {
+    // Configure Timer0
+    T0CS = 0;    // Use internal instruction clock
+    PSA = 0;     // Assign prescaler to Timer0
+    PS2 = 1;     // Set prescaler to 1:256
+    PS1 = 1;
+    PS0 = 1;
+
+    // Enable Timer0
+    TMR0 = 6;    // Clear Timer0
+    TMR0IF = 0;  // Clear Timer0 overflow flag
+    TMR0IE = 1;  // Disable Timer0 interrupt
+    GIE = 1;
+}
+
+unsigned char GenerateRandomNumber() {
+    unsigned int count = 0;
+    while (count != 186){
+        count++;
+    }
+    unsigned char randomNum = TMR0;
+    TMR0IF = 0;
+    return randomNum;
 }
 
 void KeyPadReader()
@@ -360,45 +447,6 @@ void lcdPrint(char *str) {
     while (str[n] != '\0') {
         lcdSend(str[n++], DATA);
     }
-}
-
-void __interrupt() ISR() {
-    
-    if(RCIF)
-    {
-        buffer[bufferIndex++] = RCREG;
-        
-        RCIF = 0;
-        received = 1;
-    }
-        
-    TMR0IF = 0;
-    
-}
-
-void Timer0_Init() {
-    // Configure Timer0
-    T0CS = 0;    // Use internal instruction clock
-    PSA = 0;     // Assign prescaler to Timer0
-    PS2 = 1;     // Set prescaler to 1:256
-    PS1 = 1;
-    PS0 = 1;
-
-    // Enable Timer0
-    TMR0 = 6;    // Clear Timer0
-    TMR0IF = 0;  // Clear Timer0 overflow flag
-    TMR0IE = 1;  // Disable Timer0 interrupt
-    GIE = 1;
-}
-
-unsigned char GenerateRandomNumber() {
-    unsigned int count = 0;
-    while (count != 186){
-        count++;
-    }
-    unsigned char randomNum = TMR0;
-    TMR0IF = 0;
-    return randomNum;
 }
 
 
