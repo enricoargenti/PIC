@@ -48,8 +48,6 @@ char UART_Read2(void);
 void Timer0_Init(void);
 unsigned char GenerateRandomNumber(void);
 
-unsigned char num1,num2,num3,num4,num5,num21,num22,num23,num24,num25;
-
 unsigned char myUniqueId = 0x09;
 unsigned char messageType;
 
@@ -91,7 +89,7 @@ const unsigned char rowMask[4] ={
     0b00001000
 };
 
-const unsigned char keys[] = {'#', '7', '4', '1', '*', '8', '5', '2', '0', '9', '6', '3'};
+const unsigned char keys[] = {'=', '7', '4', '1', '*', '8', '5', '2', '0', '9', '6', '3'};
 unsigned char keypressed = 0; 
 char keyok = 0;
 
@@ -104,16 +102,15 @@ char old_stato = 0;
 
 unsigned char start = 0;    // When true, it starts the program (after user presses *)
 
-char countdown = 60;
-char print_countdown[3];
-char data[6];
+unsigned char resetGlobalVariables = 0; // When true, is it used to reset all the global variables and restart the program
+
+
+
 char stringa[16];
 int stringPosition = 0;
-unsigned char restart = 0;
+
 int flag = 0;
 int index;
-unsigned char randomNum;
-unsigned int count = 0;
 
 void main()
 {
@@ -209,9 +206,12 @@ void main()
                 bufferIndex = 0;
                 received = 0;
                 //break;
-                while(1)
+                
+                lcdSend(L_L2, COMMAND);
+                lcdPrint("Press # to exit");
+                while(!resetGlobalVariables)
                 {
-                    //wait 
+                    KeyPadReader();
                 }
             }
         }
@@ -296,11 +296,11 @@ void KeyPressed(unsigned char keypressed)
     {
         start = 1;
     }
-    else if (keys[keypressed] == '#')
+    else if (keys[keypressed] == '=')
     {
-        
+        resetGlobalVariables = 1;
     }
-    else 
+    else if (start)
     {
         codeFromKeypad[codeFromKeypadIndex] = keys[keypressed];
         // First print the inserted number
@@ -325,93 +325,22 @@ void KeyPressed(unsigned char keypressed)
     
 }
 
-char UART_Read2() {
-    char trash;
-    while (countdown != 0){
-        if (!RCIF){
-            lcdSend(L_CLR, COMMAND);
-            lcdPrint("Attendere");
-            intToString(countdown, print_countdown);
-            lcdSend(L_L2, COMMAND);
-            lcdPrint(print_countdown);
-            countdown --;
-            __delay_ms(60);
-        }        
-        else{
-            while (countdown != 0){
-                intToString(countdown, print_countdown);
-                lcdSend(L_L2, COMMAND);
-                lcdPrint(print_countdown);
-                countdown --;
-                __delay_ms(60);
-                if(RCREG == myUniqueId){
-                    lcdSend(L_CLR, COMMAND);
-                    lcdSend(RCREG, DATA);
-                    RCIF = 0;
-                    trash = RCREG;
-                    while (countdown != 0){
-                        if (!RCIF){ // Wait for data to be received
-                            intToString(countdown, print_countdown);
-                            lcdSend(L_L2, COMMAND);
-                            lcdPrint(print_countdown);
-                            countdown --;
-                            __delay_ms(60);
-                        }
-                        else{
-                            while (countdown != 0){
-                                intToString(countdown, print_countdown);
-                                lcdSend(L_L2, COMMAND);
-                                lcdPrint(print_countdown);
-                                countdown --;
-                                __delay_ms(60);
-                                if(RCREG == 0x31){
-                                    lcdSend(0x80 + 1, COMMAND);
-                                    lcdSend(RCREG, DATA);                
-                                    RCIF = 0;
-                                    trash = RCREG;
-                                    countdown = 60;        
-                                    lcdSend(L_L2, COMMAND);
-                                    lcdPrint("APRI PORTA");
-                                    __delay_ms(200);
-                                    return RCREG; // Return received data
-                                }
-                                                                            
-                                RCIF = 0;
-                                trash = RCREG;
-                            }
-                        }
-                    }
-                }
-                RCIF = 0;
-                trash = RCREG;
-            }      
-        }
-    }
-    lcdSend(L_CLR, COMMAND);
-    lcdPrint("Tempo Scaduto");
-    RCIF = 0;
-    countdown = 60;
-    __delay_ms(200);
-    return RCREG;
-        /*while (!RCIF) // Wait for data to be received
-        continue;*/
-}
 
 void initLCD() {
     LCD_RS = 0;
     LCD_EN = 0;
     __delay_ms(20);
     LCD_EN = 1;
-    lcdSend(L_CFG, COMMAND); // mando il comando di configurazione CFG
+    lcdSend(L_CFG, COMMAND);
     __delay_ms(5);
-    lcdSend(L_CFG, COMMAND); // rimando il comando di configurazione CFG
+    lcdSend(L_CFG, COMMAND);
     __delay_ms(1);
     lcdSend(L_CFG, COMMAND);
     lcdSend(L_OFF, COMMAND);
     lcdSend(L_ON, COMMAND);
     lcdSend(L_CLR, COMMAND);
-    lcdSend(L_NCR, COMMAND); //Niente cursore: non lo voglio per bellezza
-    lcdSend(L_L1, COMMAND); // Se scrivo L2 stamperà sulla seconda riga  
+    lcdSend(L_NCR, COMMAND);
+    lcdSend(L_L1, COMMAND);
 }
 
 void lcdSend(char dato, char tipo) {
@@ -438,7 +367,7 @@ void __interrupt() ISR() {
     if(RCIF)
     {
         buffer[bufferIndex++] = RCREG;
-        // missing
+        
         RCIF = 0;
         received = 1;
     }
@@ -476,17 +405,16 @@ unsigned char GenerateRandomNumber() {
 char potenza(char b, char e) {
     char n = 1;
     for (int i = 0; i < e; i++) {
-        n = n * b; // che è uguale a n *= b;
+        n = n * b;
     }
     return n;
 }
 
 void intToString(int n, char *str) {
-    // calcolo il numero di cifre di cui è composto il numero
 
     char cifre = 1;
     char i = 0;
-    // fintantoché la divisione dà un numero diverso da zero è vera, incremento le cifre
+    
     while (n / potenza(10, cifre)) cifre++;
 
     for (i = 0; i < cifre; i++) {
