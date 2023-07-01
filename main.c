@@ -59,11 +59,20 @@ char buffer[50];
 char received;
 int bufferIndex;
 
+// Code inserted on keypad by user
+unsigned char codeFromKeypad[5];
+int codeFromKeypadIndex = 0;
+
+// Counter to set the position at which chars have to be printed on second line
+int secondLineLcdPosition = 9; // To print after "Insert: "
+
+// init KeyPad
+void KeyPadReader();
+void KeyPressed(unsigned char);
+
 void initLCD(void);
 void lcdSend(char, char);
 void lcdPrint(char *);
-char KeyPadReader(void);
-//void KeyPressed(unsigned char, char* codice);
 void intToString(int, char *);
 char potenza(char, char);
 
@@ -91,7 +100,8 @@ static __bit old_btn;
 char stato = 0;
 char old_stato = 0;
 
-char codice[6];
+unsigned char start = 0;    // When true, it starts the program (after user presses *=)
+
 char countdown = 60;
 char print_countdown[3];
 char data[6];
@@ -116,49 +126,46 @@ void main()
     while(1)
     {
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Premi *");
+        lcdPrint("Press *");
         num1 = GenerateRandomNumber();
         num2 = GenerateRandomNumber();
         num3 = GenerateRandomNumber();
         num4 = GenerateRandomNumber();
         num5 = GenerateRandomNumber();
-        while (codice[0] == '\0')
+        while (!start)
         {   
             KeyPadReader();
-            if (keys[keypressed] == '*'){
-                break;
-            }
         }
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Attendere");
+        lcdPrint("Wait");
         while(num1 != 0x30 && num1 != 0x31 && num1 != 0x32 && num1 != 0x33 &&
               num1 != 0x34 && num1 != 0x35 && num1 != 0x36 && num1 != 0x37 &&
               num1 != 0x38 && num1 != 0x39){
         num1 = GenerateRandomNumber();
         }
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Attendere.");
+        lcdPrint("Wait..");
         while(num2 != 0x30 && num2 != 0x31 && num2 != 0x32 && num2 != 0x33 &&
               num2 != 0x34 && num2 != 0x35 && num2 != 0x36 && num2 != 0x37 &&
               num2 != 0x38 && num2 != 0x39){
         num2 = GenerateRandomNumber();
         }
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Attendere..");
+        lcdPrint("Wait...");
         while(num3 != 0x30 && num3 != 0x31 && num3 != 0x32 && num3 != 0x33 &&
               num3 != 0x34 && num3 != 0x35 && num3 != 0x36 && num3 != 0x37 &&
               num3 != 0x38 && num3 != 0x39){
         num3 = GenerateRandomNumber();
         }
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Attendere...");
+        lcdPrint("Wait....");
         while(num4 != 0x30 && num4 != 0x31 && num4 != 0x32 && num4 != 0x33 &&
               num4 != 0x34 && num4 != 0x35 && num4 != 0x36 && num4 != 0x37 &&
               num4 != 0x38 && num4 != 0x39){
         num4 = GenerateRandomNumber();
         }
         lcdSend(L_CLR, COMMAND);
-        lcdPrint("Attendere....");
+        lcdPrint("Wait.....");
         while(num5 != 0x30 && num5 != 0x31 && num5 != 0x32 && num5 != 0x33 &&
               num5 != 0x34 && num5 != 0x35 && num5 != 0x36 && num5 != 0x37 &&
               num5 != 0x38 && num5 != 0x39){
@@ -182,17 +189,43 @@ void main()
         lcdSend(num4, DATA);
         lcdSend(num5, DATA);
         
-        keypressed = 0;
-        RS485_RxEnable();
-        flag = 1;
-        UART_Read1();
-        
-        if(received)
+        // Now we listen to the keypad and wait for the user to insert a code
+        lcdSend(L_L2, COMMAND);
+        lcdPrint("Insert: ");
+        while(codeFromKeypadIndex != 5)
         {
-            lcdSend(L_CLR, COMMAND);
-            lcdPrint("Dato arrivato");
-            bufferIndex = 0;
-            received = 0;
+            KeyPadReader();
+        }
+        // Now we send the code via serial
+        RS485_TxEnable();
+        UART_Write(myUniqueId); // Print my own unique identifier
+        messageType = 0x02;     // Here the message is type 1 (first message)
+        UART_Write(messageType); 
+        UART_Write(num1);
+        UART_Write(num2);
+        UART_Write(num3);
+        UART_Write(num4);
+        UART_Write(num5);
+        for (int i = 0; i < 5; i++)
+        {
+            UART_Write(codeFromKeypad[i]);
+        }
+        UART_Write('*');    // Stopping symbol
+        
+        
+        // Enable receiving
+        RS485_RxEnable();
+        
+        while(1)
+        {
+            if(received)
+            {
+                lcdSend(L_CLR, COMMAND);
+                lcdPrint("Dato arrivato");
+                bufferIndex = 0;
+                received = 0;
+                break;
+            }
         }
         //UART_Read2(); //legge char lentamente
     }
@@ -230,6 +263,78 @@ void UART_Write(char data) {
     while (!TXIF) // Wait for the previous transmission to finish
         continue;
     TXREG = data; // Transmit data
+}
+
+void KeyPadReader()
+{
+    TRISD |= 0x0F;
+    
+    for (colScan = 0; colScan < 3; colScan++)
+    {
+        PORTB = PORTB | 0x07;
+        PORTB &= colMask[colScan];
+
+        for (rowScan=0; rowScan < 4; rowScan++)
+        {
+            if(!(PORTD & rowMask[rowScan]) && (old_btn))
+            {
+                old_btn = 0;
+                stato++;
+            }
+            if((PORTD & rowMask[rowScan]) && (!old_btn))
+            {
+                __delay_ms(10);
+                if((PORTD & rowMask[rowScan]) && (!old_btn))
+                {
+                    old_btn = 1;
+                }
+            }
+            if(stato != old_stato)
+            {
+                keypressed = rowScan + (4 * colScan); // numero di pulsante premuto
+                // chiamo la funzione
+                KeyPressed(keypressed);
+                old_stato = stato;
+            }
+
+        }
+        //------------------------------------------------------------------
+    }
+}
+
+void KeyPressed(unsigned char keypressed)
+{
+    if (keys[keypressed] == '*')
+    {
+        start = 1;
+    }
+    else if (keys[keypressed] == '#')
+    {
+        
+    }
+    else 
+    {
+        codeFromKeypad[codeFromKeypadIndex] = keys[keypressed];
+        // First print the inserted number
+        lcdSend(L_L2 + secondLineLcdPosition++, COMMAND);
+        lcdSend(codeFromKeypad[codeFromKeypadIndex], DATA);
+        // Second increase the index
+        codeFromKeypadIndex++;
+    }
+    
+    
+    
+    __delay_ms(200);
+    
+    // rimango in un ciclo continuo fino a che
+    // il pulsante non viene rilasciato
+    PORTD = PORTD | 0x0F;
+    while((PORTD & 0x0F) != 0x0F)
+    {
+        PORTD = PORTD | 0x0F;
+        continue;
+    }
+    
 }
 
 char UART_Read2() {
@@ -431,32 +536,7 @@ void __interrupt() ISR() {
     }
         
     TMR0IF = 0;
-    if(flag == 1){
-        TRISD |= 0x0F;
-        for (colScan = 0; colScan < 3; colScan++) {
-            PORTB = PORTB | 0x07;
-            PORTB &= colMask[colScan];
-
-            for (rowScan = 0; rowScan < 4; rowScan++) {
-                if (!(PORTD & rowMask[rowScan]) && (old_btn)) {
-                    old_btn = 0;
-                    stato++;
-                }
-                if ((PORTD & rowMask[rowScan]) && (!old_btn)) {
-                    if ((PORTD & rowMask[rowScan]) && (!old_btn)) {
-                        old_btn = 1;
-                    }
-                }
-                if (stato != old_stato) {
-                    keypressed = rowScan + (4 * colScan);
-                    // chiamo la funzione
-                    //KeyPressed(keypressed, codice);
-                    old_stato = stato;
-                }
-            }
-        }
-        TRISD |= 0x00;
-    }
+    
 }
 
 void Timer0_Init() {
@@ -484,87 +564,6 @@ unsigned char GenerateRandomNumber() {
     return randomNum;
 }
 
-char KeyPadReader() {
-    TRISD |= 0x0F;
-    //do
-    // porto a massa una colonna alla volta
-    for (colScan = 0; colScan < 3; colScan++) {
-        PORTB = PORTB | 0x07; // porto tutte le colonne a 1
-        PORTB &= colMask[colScan]; // porto a zero la colonna attuale
-
-        // ciclo sulle righe
-        for (rowScan = 0; rowScan < 4; rowScan++) {
-            if (!(PORTD & rowMask[rowScan]) && (old_btn)) {
-                old_btn = 0;
-                stato++;
-            }
-            if ((PORTD & rowMask[rowScan]) && (!old_btn)) {
-                __delay_ms(10);
-                if ((PORTD & rowMask[rowScan]) && (!old_btn)) {
-                    old_btn = 1;
-                }
-            }
-            if (stato != old_stato) {
-                keypressed = rowScan + (4 * colScan); // numero di pulsante premuto
-                // chiamo la funzione
-                //KeyPressed(keypressed, codice);
-                old_stato = stato;
-                return keypressed;
-            }
-        }
-    }
-    //while(1);
-}
-
-/*void KeyPressed(unsigned char keypressed, char* codice) {
-    // Se l'utente preme l'asterisco, un codice di cinque numeri 
-    // viene generato randomicamente
-    if (keys[keypressed] == '*') {
-        // Use current time as
-        // seed for random generator
-        char upper = 9;
-        char lower = 0;
-        int stringPosition = 0;
-
-        char numero[5];
-
-        int i;
-        int count = 5;
-        //int codice[5];
-
-        for (i = 0; i < count; i++) {
-            char randNumber = '0' + ((rand() % (upper - lower + 1)) + lower);
-
-            //intToString(randNumber, numero);    // passo n da convertire e stringa in cui salvarlo
-
-
-            codice[i] = randNumber;
-
-
-        }
-        codice[5] = '\0';
-        lcdSend(L_L1, COMMAND);
-        flag = 1;
-
-        // Test per capire se i numeri contenuti nell'array codice siano giusti
-        for (i = 0; i < count; i++) {
-            intToString(codice[i], numero);    // passo n da convertire e stringa in cui salvarlo
-            lcdSend(L_L1+(stringPosition++), COMMAND);
-            lcdPrint(numero);
-        }
-    }
-
-    __delay_ms(100);
-
-    // rimango in un ciclo continuo fino a che
-    // il pulsante non viene rilasciato
-    PORTD = PORTD | 0x0F;
-    while ((PORTD & 0x0F) != 0x0F) {
-        PORTD = PORTD | 0x0F;
-        continue;
-    }
-
-}*/
 
 char potenza(char b, char e) {
     char n = 1;
