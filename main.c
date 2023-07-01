@@ -208,7 +208,11 @@ void main()
                 lcdPrint("Dato arrivato");
                 bufferIndex = 0;
                 received = 0;
-                break;
+                //break;
+                while(1)
+                {
+                    //wait 
+                }
             }
         }
         //UART_Read2(); //legge char lentamente
@@ -436,6 +440,7 @@ void __interrupt() ISR() {
         buffer[bufferIndex++] = RCREG;
         // missing
         RCIF = 0;
+        received = 1;
     }
         
     TMR0IF = 0;
