@@ -1,3 +1,4 @@
+
 #pragma config FOSC  = HS       // Oscillator Selection bits (XT oscillator)
 #pragma config WDTE  = OFF      // Watchdog Timer Enable bit (WDT enabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
@@ -211,7 +212,7 @@ void main()
             // Wait
         }
         
-        //checkMessage();
+        checkMessage();
         
         lcdSend(L_L2, COMMAND);
         lcdPrint("Press # to exit");
@@ -264,7 +265,7 @@ void checkMessage() {
     for (int i = 0; i < 10; i++)
     {
         lcdSend(L_L1 + i, COMMAND);
-        lcdSend(buffer[i], DATA);
+        lcdSend(buffer[i] + 65, DATA);
     }
             
     if (buffer[0] == myUniqueId && buffer[1] == gatewayId)
@@ -272,11 +273,13 @@ void checkMessage() {
         //lcdSend(L_L1, COMMAND);
         //lcdPrint("Weyyyy!");
         
+        /*
         for (int i = 0; i < 10; i++)
         {
             lcdSend(L_L1 + i, COMMAND);
             lcdSend(buffer[i] + 0x30, DATA);
         }
+         * */
         
         
         // This message is for me
@@ -336,9 +339,9 @@ void UART_Read() {
     buffer[bufferIndex++] = RCREG;
     //buffer[bufferIndex] = '\0';
     received = 1;
-    lcdSend(L_CLR, COMMAND);
-    lcdSend(L_L2, COMMAND);
-    lcdPrint("Arrivato");
+    //lcdSend(L_CLR, COMMAND);
+    //lcdSend(L_L2, COMMAND);
+    //lcdPrint("Arrivato");
 }
 
 void __interrupt() ISR() {
