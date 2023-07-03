@@ -43,7 +43,7 @@ void UART_Init(void);
 void RS485_TxEnable(void);
 void RS485_RxEnable(void);
 void UART_Write(char data);
-char UART_Read2(void);
+void UART_Read(void);
 
 void Timer0_Init(void);
 unsigned char GenerateRandomNumber(void);
@@ -204,8 +204,21 @@ void main()
         // Enable receiving
         RS485_RxEnable();
         
+        UART_Read();
+        
+        
         while(1)
         {
+            for (int i = 0; i < 10; i++)
+            {
+                lcdSend(L_L1 + i, COMMAND);
+                lcdSend(buffer[i], DATA);
+            }
+        }
+        /*
+        while(1)
+        {
+            received = 1; // Test
             if(received)
             {
                 //lcdSend(L_CLR, COMMAND);
@@ -215,6 +228,7 @@ void main()
                 
                 //Reset only the buffer:
                 // you still have to wait for the message for you
+                
                 
                 bufferIndex = 0;
                 received = 0;
@@ -229,13 +243,20 @@ void main()
                 {
                     KeyPadReader();
                 }
+                
             }
         }
-        //UART_Read2(); //legge char lentamente
+        */
     }
 }
 
 void checkMessage() {
+    for (int i = 0; i < 10; i++)
+    {
+        lcdSend(L_L1 + i, COMMAND);
+        lcdSend(buffer[i], DATA);
+    }
+            
     if (buffer[0] == myUniqueId && buffer[1] == gatewayId)
     {
         //lcdSend(L_L1, COMMAND);
@@ -301,15 +322,25 @@ void UART_Write(char data) {
     TXREG = data; // Transmit data
 }
 
+void UART_Read() {
+    while (!PIR1bits.RCIF) // Wait until data is received
+        continue;
+    buffer[bufferIndex++] = RCREG;
+    //buffer[bufferIndex] = '\0';
+    //received = 1;
+    lcdSend(L_CLR, COMMAND);
+    lcdSend(L_L2, COMMAND);
+    lcdPrint("Arrivato");
+}
+
 void __interrupt() ISR() {
     
+    /*
     if(RCIF)
     {
         buffer[bufferIndex++] = RCREG;
-        
-        RCIF = 0;
-        received = 1;
     }
+     * */
         
     TMR0IF = 0;
     
