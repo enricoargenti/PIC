@@ -50,6 +50,8 @@ unsigned char GenerateRandomNumber(void);
 
 void checkMessage(void);
 
+void ResetGlobalVariables(void);
+
 unsigned char gatewayId = 0x00;     // The gateway id is a constant
 unsigned char myUniqueId = 0x09;    // My id is also a constant
 unsigned char messageType;
@@ -112,12 +114,10 @@ unsigned char start = 0;    // When true, it starts the program (after user pres
 unsigned char resetGlobalVariables = 0; // When true, is it used to reset all the global variables and restart the program
 
 
-
+// To print numbers as strings
 char stringa[16];
 int stringPosition = 0;
 
-int flag = 0;
-int index;
 
 void main()
 {
@@ -206,48 +206,58 @@ void main()
         
         UART_Read();
         
+        while(!received)
+        {
+            // Wait
+        }
         
-        while(1)
+        //checkMessage();
+        
+        lcdSend(L_L2, COMMAND);
+        lcdPrint("Press # to exit");
+        while(!resetGlobalVariables)
         {
-            for (int i = 0; i < 10; i++)
-            {
-                lcdSend(L_L1 + i, COMMAND);
-                lcdSend(buffer[i], DATA);
-            }
+            KeyPadReader();
         }
-        /*
-        while(1)
-        {
-            received = 1; // Test
-            if(received)
-            {
-                //lcdSend(L_CLR, COMMAND);
-                //lcdPrint("Dato arrivato");
-                
-                checkMessage();
-                
-                //Reset only the buffer:
-                // you still have to wait for the message for you
-                
-                
-                bufferIndex = 0;
-                received = 0;
-                for (int i = 0; i < 50; i++)
-                {
-                    buffer[i] = '\0';
-                }
-                
-                lcdSend(L_L2, COMMAND);
-                lcdPrint("Press # to exit");
-                while(!resetGlobalVariables)
-                {
-                    KeyPadReader();
-                }
-                
-            }
-        }
-        */
+        // Then reset the global variables
+        ResetGlobalVariables();
     }
+}
+
+void ResetGlobalVariables()
+{     
+    // Reset received
+    received = 0;
+
+    // Reset buffer
+    bufferIndex = 0;
+    for (int i = 0; i < 50; i++)
+    {
+        buffer[i] = '\0';
+    }
+
+    // Reset deviceGeneratedCode
+    deviceGeneratedCodeIndex = 0;
+    for (int i = 0; i < 5; i++)
+    {
+        deviceGeneratedCode[i] = '\0';
+    }
+
+    // Code inserted on keypad by user
+    codeFromKeypadIndex = 0;
+    for (int i = 0; i < 5; i++)
+    {
+        codeFromKeypad[i] = '\0';
+    }
+
+    // Reset the space line for second row
+    secondLineLcdPosition = 9;
+
+    // Reset global variables value
+    resetGlobalVariables = 0;
+
+    // Reset start
+    start = 0;
 }
 
 void checkMessage() {
@@ -280,8 +290,6 @@ void checkMessage() {
             lcdSend(L_L1, COMMAND);
             lcdPrint("Can't open,sorry");
         }
-        
-        // Here reset all the global variables
         
         
     }
@@ -327,7 +335,7 @@ void UART_Read() {
         continue;
     buffer[bufferIndex++] = RCREG;
     //buffer[bufferIndex] = '\0';
-    //received = 1;
+    received = 1;
     lcdSend(L_CLR, COMMAND);
     lcdSend(L_L2, COMMAND);
     lcdPrint("Arrivato");
