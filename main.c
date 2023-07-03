@@ -1,4 +1,3 @@
-
 #pragma config FOSC  = HS       // Oscillator Selection bits (XT oscillator)
 #pragma config WDTE  = OFF      // Watchdog Timer Enable bit (WDT enabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
@@ -205,12 +204,17 @@ void main()
         // Enable receiving
         RS485_RxEnable();
         
-        UART_Read();
+        //UART_Read();
         
-        while(!received)
+        while(bufferIndex < 4)
         {
             // Wait
+            UART_Read();
+            lcdSend(L_L2, COMMAND);
+            lcdPrint("Wait for data");
         }
+        lcdSend(L_L2, COMMAND);
+        lcdPrint("Done!");
         
         checkMessage();
         
