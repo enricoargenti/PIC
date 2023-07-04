@@ -1,4 +1,3 @@
-
 #pragma config FOSC  = HS       // Oscillator Selection bits (XT oscillator)
 #pragma config WDTE  = OFF      // Watchdog Timer Enable bit (WDT enabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
@@ -38,23 +37,68 @@
 #define RS485_RX_EN     RC1     // Receive enable pin
 
 
+// Functions ------------------------------------------------------------------
 
 void __interrupt() ISR();
+void Timer0_Init(void);
+
 void UART_Init(void);
 void RS485_TxEnable(void);
 void RS485_RxEnable(void);
 void UART_Write(char data);
 void UART_Read(void);
 
-void Timer0_Init(void);
 unsigned char GenerateRandomNumber(void);
 
 void checkMessage(void);
 
 void ResetGlobalVariables(void);
 
-unsigned char gatewayId = 0x00;     // The gateway id is a constant
-unsigned char myUniqueId = 0x09;    // My id is also a constant
+// init KeyPad
+void KeyPadReader();
+void KeyPressed(unsigned char);
+
+void initLCD(void);
+void lcdSend(char, char);
+void lcdPrint(char *);
+void intToString(int, char *);
+char potenza(char, char);
+
+
+// Global variables and constants --------------------------------------------
+
+const unsigned char colMask[3] ={
+    0b11111110,
+    0b11111101,
+    0b11111011
+};
+const unsigned char rowMask[4] ={
+    0b00000001,
+    0b00000010,
+    0b00000100,
+    0b00001000
+};
+
+const unsigned char keys[] = {'=', '7', '4', '1', '*', '8', '5', '2', '0', '9', '6', '3'};
+unsigned char keypressed = 0; 
+char keyok = 0;
+
+unsigned char colScan = 0;
+unsigned char rowScan = 0;
+static __bit old_btn;
+char stato = 0;
+char old_stato = 0;
+
+// To print numbers as strings
+char stringa[16];
+int stringPosition = 0;
+
+
+unsigned char start = 0;    // When true, it starts the program (after user presses *)
+unsigned char resetGlobalVariables = 0; // When true, is it used to reset all the global variables and restart the program
+
+const unsigned char gatewayId = 0x00;     // The gateway id is a constant
+const unsigned char myUniqueId = 0x09;    // My id is also a constant
 unsigned char messageType;
 
 // Buffer to receive messages from the serial port
@@ -74,50 +118,10 @@ int codeFromKeypadIndex = 0;
 int secondLineLcdPosition = 9; // To print after "Insert: "
 
 // Confirmation codes to open the door or not
-unsigned char openDoorCode = 0x01;
-unsigned char doNotOpenDoorCode = 0x02;
+const unsigned char openDoorCode = 0x01;
+const unsigned char doNotOpenDoorCode = 0x02;
+const unsigned char errorCode = 0x03;
 
-// init KeyPad
-void KeyPadReader();
-void KeyPressed(unsigned char);
-
-void initLCD(void);
-void lcdSend(char, char);
-void lcdPrint(char *);
-void intToString(int, char *);
-char potenza(char, char);
-
-const unsigned char colMask[3] ={
-    0b11111110,
-    0b11111101,
-    0b11111011
-};
-const unsigned char rowMask[4] ={
-    0b00000001,
-    0b00000010,
-    0b00000100,
-    0b00001000
-};
-
-const unsigned char keys[] = {'=', '7', '4', '1', '*', '8', '5', '2', '0', '9', '6', '3'};
-unsigned char keypressed = 0; 
-char keyok = 0;
-
-
-unsigned char colScan = 0;
-unsigned char rowScan = 0;
-static __bit old_btn;
-char stato = 0;
-char old_stato = 0;
-
-unsigned char start = 0;    // When true, it starts the program (after user presses *)
-
-unsigned char resetGlobalVariables = 0; // When true, is it used to reset all the global variables and restart the program
-
-
-// To print numbers as strings
-char stringa[16];
-int stringPosition = 0;
 
 
 void main()
@@ -205,12 +209,15 @@ void main()
         // Enable receiving
         RS485_RxEnable();
         
-        UART_Read();
-        
-        while(!received)
+        while(bufferIndex < 4)
         {
             // Wait
+            UART_Read();
+            lcdSend(L_L2, COMMAND);
+            lcdPrint("Wait for data");
         }
+        lcdSend(L_L2, COMMAND);
+        lcdPrint("Done!");
         
         checkMessage();
         
@@ -262,26 +269,13 @@ void ResetGlobalVariables()
 }
 
 void checkMessage() {
-    for (int i = 0; i < 10; i++)
-    {
-        lcdSend(L_L1 + i, COMMAND);
-        lcdSend(buffer[i] + 65, DATA);
-    }
             
     if (buffer[0] == myUniqueId && buffer[1] == gatewayId)
     {
         //lcdSend(L_L1, COMMAND);
         //lcdPrint("Weyyyy!");
         
-        /*
-        for (int i = 0; i < 10; i++)
-        {
-            lcdSend(L_L1 + i, COMMAND);
-            lcdSend(buffer[i] + 0x30, DATA);
-        }
-         * */
-        
-        
+       
         // This message is for me
         if (buffer[3] == openDoorCode)
         {
